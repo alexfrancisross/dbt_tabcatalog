@@ -11,6 +11,5 @@ TABLEAU:
   TABLEAU_TOKEN : 'VyJHyN7NQFKFHwQMX1LjfQ==:NS7kXssry1W2CZGfyatyP1nGVfGRxtin'
   TABLEAU_SITE : 'tableaujunkietest'
   TABLEAU_SERVER : 'https://prod-uk-a.online.tableau.com'
-  TABLEAU_SERVER_VERSION : '3.16'
   DATABASE_TYPE : 'snowflake'
   DATABASE_NAME : 'DBT'
