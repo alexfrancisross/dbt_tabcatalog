@@ -3,13 +3,15 @@ DBT:
   DBT_PAT : '1086a0bfb6a076f8122139167ca1ea2547203da0'
   DBT_CLOUD_API : 'https://cloud.getdbt.com/api/v2/accounts/'
   DBT_METADATA_API : 'https://metadata.cloud.getdbt.com/graphql'
+  DBT_META_CERTIFICATION_FLAG : 'TableauCertified'
 
 #TABLEAU SETTINGS
 TABLEAU:
   TABLEAU_TOKEN_NAME : 'dbt'
-  #TABLEAU_TOKEN : 'oy6StRGkRl+r1xND0swiRQ==:qMCffoOsl6IQBAcssgfAJK2VLrn9ZzdJ'
   TABLEAU_TOKEN : 'VyJHyN7NQFKFHwQMX1LjfQ==:NS7kXssry1W2CZGfyatyP1nGVfGRxtin'
   TABLEAU_SITE : 'tableaujunkietest'
   TABLEAU_SERVER : 'https://prod-uk-a.online.tableau.com'
   DATABASE_TYPE : 'snowflake'
   DATABASE_NAME : 'DBT'
+  CERTIFY_TABLES : True
+  CERTIFICATION_NOTE : 'This table is linked to a dbt model and was automatically certified via the dbt Cloud and Tableau metadata API integration'
