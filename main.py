@@ -82,12 +82,14 @@ def authenticate_tableau(tableau_server, tableau_site_name, tableau_token_name, 
     return (tableau_creds)
 
 def tableau_get_databases(tableau_server, database_type, database_name, tableau_creds):
-    mdapi_query = '''query get_datasources {
-          databases(filter: {connectionType: "''' + database_type + '''", name: "''' + database_name + '''"}) {
+    #   databases(filter: {connectionType: "''' + database_type + '''", name: "''' + database_name + '''"}) {
+    mdapi_query = '''query get_databases {
+          databases(filter: {connectionType: "''' + database_type + '''"}) {
             name
             id
             tables {
               name
+              schema
               id
               luid
             }
@@ -142,6 +144,7 @@ def publish_tableau_column_descriptions(tableau_server, dbt_columns, tableau_col
             print('Error publishing Tableau column descriptions ' + str(e))
     return (column_description_response)
 
+
 def publish_tableau_column_tags(tableau_server, tableau_columns, tag, tableau_creds):
     headers = {
         'X-Tableau-Auth': tableau_creds['token'],
@@ -156,6 +159,27 @@ def publish_tableau_column_tags(tableau_server, tableau_columns, tag, tableau_cr
         except Exception as e:
             print('Error publishing Tableau column tags ' + str(e))
     return (column_tags_response)
+
+def match_dbtmodels_to_tableautables(tableau_database,dbtmodels):
+    d = defaultdict(dict)
+    m = defaultdict(dict)
+
+    #for table in tableau_database_tables:
+    #    if table['name'].upper() in dbtmodels:
+    #        for elem in l:
+    #            d[elem['name'].upper()].update(elem)
+
+    for table in tableau_database['tables']:
+        d[table['name'].upper()].update(table)
+        for model in dbtmodels:
+            if model['name'].upper() == table['name'].upper() and model['schema'].upper() == table['schema'].upper(): #and model['database'].upper() == table['database'].upper():
+                #if model['name'].upper() in d.keys():
+                m[model['name'].upper()].update(model)
+                m[table['name'].upper()].update(table)
+    matched_tables = sorted(m.values(), key=itemgetter("name"))
+    print(matched_tables)
+
+    return (matched_tables)
 
 
 def publish_tableau_table_tags(tableau_server, table_id, tag, tableau_creds):
@@ -191,11 +215,13 @@ def set_tableau_table_quality_warning(tableau_server, table_id, dbt_model, isSev
     dbt_model_status='failed' #TEST FLAG
 
     dbt_cloud_base_url = 'https://cloud.getdbt.com/next/deploy/' + str(dbt_model['accountId']) + '/projects/' + str(dbt_model['projectId'])
-    message = 'dbt model status: *' + dbt_model['status'] + "*&#xA;" + 'dbt model uniqueId: *' + str(dbt_model['uniqueId']) \
-              + "*&#xA;" + 'dbt runId: *' + str(dbt_model['runId']) + "*&#xA;" + 'dbt jobId: *' + str(dbt_model['jobId']) \
-              + "*&#xA;" + 'data quality warning last updated: *'+ str(datetime.utcnow().strftime("%Y-%m-%d %H:%MUTC")) +  "*&#xA;" \
+    message = 'dbt model status: *' + dbt_model_status + "*&#xA;" \
               + xmlesc('"dbt job":' + dbt_cloud_base_url + "/jobs/" + str(dbt_model['jobId'])) \
               + xmlesc(' | "dbt run":' + dbt_cloud_base_url + "/runs/" + str(dbt_model['runId']))
+            #+ 'dbt model uniqueId: *' + str(dbt_model['uniqueId']) \
+            #+ "*&#xA;" + 'dbt runId: *' + str(dbt_model['runId']) + "*&#xA;" + 'dbt jobId: *' + str(dbt_model['jobId']) \
+            #+ "*&#xA;" + 'data quality warning last updated: *'+ str(datetime.utcnow().strftime("%Y-%m-%d %H:%MUTC")) +  "*&#xA;" \
+
 
     json_headers = {
         'X-Tableau-Auth': tableau_creds['token'],
@@ -311,22 +337,24 @@ print(tableau_databases)
 for dbt_job in dbt_jobs:
     dbt_models = dbt_get_models_for_job(dbt_metadata_api, dbt_token, dbt_job['id'])
 
+    if len(dbt_models)>0:
+        for tableau_database in tableau_databases:
+            matched_tables = match_dbtmodels_to_tableautables(tableau_database, dbt_models)
     for dbt_model in dbt_models:
-        if dbt_model['database']==database_name:
 
-            for tableau_database in tableau_databases:
-                for tableau_table in tableau_database['tables']:
+        for tableau_database in tableau_databases:
+            for tableau_table in tableau_database['tables']:
 
-                    if dbt_model['name'].upper() == tableau_table['name'].upper(): #if dbt table name in model matched table in Tableau Data Source
-                        tableau_columns = get_tableau_columns(tableau_server,tableau_table['luid'], tableau_creds)
-                        table_description=make_table_description(dbt_model)
-                        publish_tableau_table_description(tableau_server,tableau_table['luid'], table_description, tableau_creds)
-                        set_tableau_table_quality_warning(tableau_server, tableau_table['luid'], dbt_model, True, tableau_creds)
-                        if certify_tables:
-                            certify_tableau_table(tableau_server, tableau_table['luid'], certification_note, tableau_creds)
-                        publish_tableau_table_tags(tableau_server, tableau_table['luid'], dbt_model['packageName'], tableau_creds)
-                        publish_tableau_column_descriptions(tableau_server, dbt_model['columns'], tableau_columns, tableau_creds)
-                        publish_tableau_column_tags(tableau_server, tableau_columns, dbt_model['packageName'], tableau_creds)
+                if dbt_model['name'].upper() == tableau_table['name'].upper(): #if dbt table name in model matched table in Tableau Data Source
+                    tableau_columns = get_tableau_columns(tableau_server,tableau_table['luid'], tableau_creds)
+                    table_description=make_table_description(dbt_model)
+                    publish_tableau_table_description(tableau_server,tableau_table['luid'], table_description, tableau_creds)
+                    set_tableau_table_quality_warning(tableau_server, tableau_table['luid'], dbt_model, True, tableau_creds)
+                    if certify_tables:
+                        certify_tableau_table(tableau_server, tableau_table['luid'], certification_note, tableau_creds)
+                    publish_tableau_table_tags(tableau_server, tableau_table['luid'], dbt_model['packageName'], tableau_creds)
+                    publish_tableau_column_descriptions(tableau_server, dbt_model['columns'], tableau_columns, tableau_creds)
+                    publish_tableau_column_tags(tableau_server, tableau_columns, dbt_model['packageName'], tableau_creds)
 
 
 
