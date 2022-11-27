@@ -26,7 +26,7 @@ def dbt_get_account_id(dbt_cloud_api, dbt_token):
     return (dbt_account_id)
 
 def dbt_get_jobs(dbt_account_id, dbt_cloud_api, dbt_token):
-    print('getting dbt jobs...')
+    print('getting dbt jobs for account id ' + str(dbt_account_id) + '...')
     url = dbt_cloud_api + str(dbt_account_id) +"/jobs"
     payload={}
     headers = {
@@ -45,6 +45,7 @@ def dbt_get_jobs(dbt_account_id, dbt_cloud_api, dbt_token):
 def dbt_get_models_for_job(dbt_metadata_api, dbt_token, job_id):
     print('getting dbt models for jobId: ' + str(job_id) + '...')
     url = dbt_metadata_api
+    dbt_models=[]
     payload = '{\"query\":\"{\\n  models(jobId: ' + str(job_id) + ') {\\n    uniqueId\\n    packageName\\n    runId\\n    accountId\\n    projectId\\n    environmentId\\n    jobId\\n    executionTime\\n    status\\n    executeCompletedAt\\n    database\\n    schema\\n\\n   name\\n\\n  description\\n\\n meta\\n\\n  stats {\\n        id\\n        value\\n    }\\n\\n   columns {\\n        name\\n        description\\n    }\\n\\n  }\\n}\",\"variables\":{}}'
     headers = {
       'Authorization': 'Token ' + dbt_token,
@@ -55,14 +56,13 @@ def dbt_get_models_for_job(dbt_metadata_api, dbt_token, job_id):
         response_json = json.loads(response.text)
         dbt_models = response_json['data']['models']
         print('retreived  ' + str(len(dbt_models)) + ' dbt models for jobId: ' + str(job_id))
-        return(dbt_models)
     except Exception as e:
         print('Error getting dbt models for job id: ' + str(job_id) + ' ' + str(e))
-        return([])
+    return (dbt_models)
 
 def authenticate_tableau(tableau_server, tableau_site_name, tableau_token_name, tableau_token):
     url = tableau_server + "/api/" + TABLEAU_API_VERSION + "/auth/signin"
-    print('authenticating with Tableau Server url ' + url + '...')
+    print('authenticating with Tableau Server url: ' + url + '...')
     payload = json.dumps({
         "credentials": {
             "personalAccessTokenName": tableau_token_name,
@@ -86,7 +86,7 @@ def authenticate_tableau(tableau_server, tableau_site_name, tableau_token_name, 
     return (tableau_creds)
 
 def tableau_get_databases(tableau_server, database_type, tableau_creds):
-    print('getting databases list from Tableau metadata API where database type is ' + database_type + '...')
+    print('getting databases list from Tableau metadata API with database type: ' + database_type + '...')
     mdapi_query = '''query get_databases {
           databases(filter: {connectionType: "''' + database_type + '''"}) {
             name
@@ -106,13 +106,12 @@ def tableau_get_databases(tableau_server, database_type, tableau_creds):
                                        json={"query": mdapi_query})
         tableau_databases = json.loads(metadata_query.text)['data']['databases']
         print('retrived '+ str(len(tableau_databases)) + ' Tableau databases')
-        return (tableau_databases)
     except Exception as e:
         print('Error getting databases from Tableau metadata API ' + str(e))
-        return([])
+    return (tableau_databases)
 
 def tableau_get_databaseServers(tableau_server, database_type, tableau_creds):
-    print('getting database server list from Tableau metadata API where database type is' + database_type + '...')
+    print('getting database server list from Tableau metadata API with database type: ' + database_type + '...')
     mdapi_query = '''query get_databaseServers {
           databaseServers(filter: {connectionType: "''' + database_type + '''"}) {
             name
@@ -276,8 +275,7 @@ def set_tableau_table_quality_warning(tableau_server, tableau_table_id, dbt_mode
     except Exception as e:
         print('Error setting data quality warning table description ' + str(e))
     print('updated tableau table data quality warning')
-    return()
-
+    return(response)
 
 def set_tableau_table_certification(tableau_server, tableau_table_id, isCertified, certification_note, tableau_creds):
     print('updating tableau table certification table luid: '  + tableau_table_id + '...')
@@ -294,11 +292,11 @@ def set_tableau_table_certification(tableau_server, tableau_table_id, isCertifie
         'Content-Type': 'text/plain'
     }
     try:
-        table_certification_response = requests.request("PUT", url, headers=headers, data=payload).text
+        response = requests.request("PUT", url, headers=headers, data=payload).text
     except Exception as e:
         print('Error certifying Tableau table ' + str(e))
     print('updated tableau table certification')
-    return(table_certification_response)
+    return(response)
 
 def xmlesc(txt):
     txt = txt.replace("&", "&amp;")
@@ -306,6 +304,7 @@ def xmlesc(txt):
     txt = txt.replace(">", "&gt;")
     txt = txt.replace('"', "&quot;")
     txt = txt.replace("'", "&apos;")
+    txt = txt.replace("\n", "&#xA;")
     return txt
 
 def make_table_description(dbt_model):
@@ -326,7 +325,6 @@ def make_table_description(dbt_model):
         table_description = line1 + "&#xA;" + line2 + "&#xA;" + line3 + "&#xA;" + line4
     else:
         table_description = line1 + "&#xA;" + line3 + "&#xA;" + line4
-
     return(table_description)
 
 def read_yaml():
@@ -347,12 +345,12 @@ dbt_meta_certification_flag = settings['DBT']['DBT_META_CERTIFICATION_FLAG']
 tableau_token = settings['TABLEAU']['TABLEAU_TOKEN']
 tableau_token_name = settings['TABLEAU']['TABLEAU_TOKEN_NAME']
 tableau_token = settings['TABLEAU']['TABLEAU_TOKEN']
-tableau_site =  settings['TABLEAU']['TABLEAU_SITE']
-tableau_server =  settings['TABLEAU']['TABLEAU_SERVER']
-database_type =  settings['TABLEAU']['DATABASE_TYPE']
-database_name =  settings['TABLEAU']['DATABASE_NAME']
-certification_note =  settings['TABLEAU']['CERTIFICATION_NOTE']
-isSevere =  settings['TABLEAU']['DQ_WARNING_IS_SEVERE']
+tableau_site = settings['TABLEAU']['TABLEAU_SITE']
+tableau_server = settings['TABLEAU']['TABLEAU_SERVER']
+database_type = settings['TABLEAU']['DATABASE_TYPE']
+database_name = settings['TABLEAU']['DATABASE_NAME']
+certification_note = settings['TABLEAU']['CERTIFICATION_NOTE']
+isSevere = settings['TABLEAU']['DQ_WARNING_IS_SEVERE']
 
 dbt_account_id = dbt_get_account_id(dbt_cloud_api, dbt_token)
 dbt_jobs = dbt_get_jobs(dbt_account_id,dbt_cloud_api,dbt_token)
