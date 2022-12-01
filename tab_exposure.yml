@@ -1,0 +1,33 @@
+exposures:
+- depends_on:
+  - ref('int_customer_order_history_joined')
+  - ref('orders')
+  description: this is my workbook description
+  maturity: high
+  name: workbook with a join
+  owner:
+    email: aross@tableau.com
+    name: Alex Ross
+  type: dashboard
+  url: https://prod-uk-a.online.tableau.com/#/site/tableaujunkietest/workbooks/249187
+- depends_on:
+  - ref('orders')
+  description: my best workbook
+  maturity: high
+  name: Orders workbook published ds
+  owner:
+    email: aross@tableau.com
+    name: Alex Ross
+  type: dashboard
+  url: https://prod-uk-a.online.tableau.com/#/site/tableaujunkietest/workbooks/246023
+- depends_on:
+  - ref('orders')
+  description: ''
+  maturity: high
+  name: alex's orders workbooks
+  owner:
+    email: aross@tableau.com
+    name: Alex Ross
+  type: dashboard
+  url: https://prod-uk-a.online.tableau.com/#/site/tableaujunkietest/workbooks/247795
+version: 2
