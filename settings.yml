@@ -3,7 +3,7 @@ DBT:
   DBT_PAT : '1086a0bfb6a076f8122139167ca1ea2547203da0' #string: dbt Cloud PAT token
   DBT_CLOUD_API : 'https://cloud.getdbt.com/api/v2/accounts/' #string: dbt Cloud API endpoint
   DBT_METADATA_API : 'https://metadata.cloud.getdbt.com/graphql' #string: dbt Cloud Metadata API endpoint
-  DBT_META_CERTIFICATION_FLAG : 'TableauCertified' #string: a boolean dbt meta config attribute used to indicate whether tableau table should be certified. see https://docs.getdbt.com/reference/resource-configs/meta
+  DBT_META_CERTIFICATION_FLAG : 'TableauCertified' #string: a boolean dbt meta config attribute used to indicate whether tableau table should be certified. Leave blank to certify all tableau tables. see https://docs.getdbt.com/reference/resource-configs/meta
   DBT_PROJECT_FILTER : ["jaffle_shop_metrics", "football_transfers_demo"] #list: list of dbt projects to sync. Leave empty list to sync all dbt projects
   DBT_GENERATE_EXPOSURES : True #boolean: flag whether to generate dbt exposures
   DBT_EXPOSURES_FILE_LOCATION : '.\exposures'

@@ -414,7 +414,11 @@ def set_tableau_table_quality_warning(tableau_server, merged_table, isSevere, ta
 def set_tableau_table_certification(tableau_server, merged_table, dbt_meta_certification_flag, certification_note, tableau_creds):
     full_table_name = get_full_table_name(merged_table)
     print('updating table certification for tableau table: ' + full_table_name + '...')
-    if dbt_meta_certification_flag in merged_table['meta']:
+
+    if dbt_meta_certification_flag=='':
+        isCertified = True
+        certification_note = xmlesc(certification_note)
+    elif dbt_meta_certification_flag in merged_table['meta']:
         isCertified = merged_table['meta'][dbt_meta_certification_flag]
         certification_note = xmlesc(certification_note)
         #+ '\nmodel: *' + merged_table['uniqueId'] + '*' )
@@ -484,63 +488,64 @@ def generate_dbt_exposures(mergedtable, downstream_workbooks, tableau_server, ta
     return
 
 #read project yaml file
-def read_yaml():
+class app_settings:
     try:
         with open(CONFIG) as f:
             data = yaml.load(f, Loader=SafeLoader)
-        return data
+
+            dbt_token = data['DBT']['DBT_PAT']
+            dbt_cloud_api = data['DBT']['DBT_CLOUD_API']
+            dbt_metadata_api = data['DBT']['DBT_METADATA_API']
+            dbt_meta_certification_flag = data['DBT']['DBT_META_CERTIFICATION_FLAG']
+            dbt_project_filter = data['DBT']['DBT_PROJECT_FILTER']
+            dbt_generate_exposures = data['DBT']['DBT_GENERATE_EXPOSURES']
+
+            tableau_token = data['TABLEAU']['TABLEAU_TOKEN']
+            tableau_token_name = data['TABLEAU']['TABLEAU_TOKEN_NAME']
+            tableau_token = data['TABLEAU']['TABLEAU_TOKEN']
+            tableau_site = data['TABLEAU']['TABLEAU_SITE']
+            tableau_server = data['TABLEAU']['TABLEAU_SERVER']
+            tableau_certification_note = data['TABLEAU']['TABLEAU_CERTIFICATION_NOTE']
+            tableau_dq_warning_isSevere = data['TABLEAU']['TABLEAU_DQ_WARNING_IS_SEVERE']
+
+            database_type_filter = data['DATABASE']['DATABASE_TYPE_FILTER']
+            database_name_filter = data['DATABASE']['DATABASE_NAME_FILTER']
+            database_account_filter = data['DATABASE']['DATABASE_ACCOUNT_FILTER']
+
     except Exception as e:
         print("failed to read yaml file " + str(e))
 
+
 #MAIN PROGRAM
-settings = read_yaml()
-dbt_token = settings['DBT']['DBT_PAT']
-dbt_cloud_api = settings['DBT']['DBT_CLOUD_API']
-dbt_metadata_api = settings['DBT']['DBT_METADATA_API']
-dbt_meta_certification_flag = settings['DBT']['DBT_META_CERTIFICATION_FLAG']
-dbt_project_filter = settings['DBT']['DBT_PROJECT_FILTER']
-dbt_generate_exposures = settings['DBT']['DBT_GENERATE_EXPOSURES']
+settings = app_settings()
 
-tableau_token = settings['TABLEAU']['TABLEAU_TOKEN']
-tableau_token_name = settings['TABLEAU']['TABLEAU_TOKEN_NAME']
-tableau_token = settings['TABLEAU']['TABLEAU_TOKEN']
-tableau_site = settings['TABLEAU']['TABLEAU_SITE']
-tableau_server = settings['TABLEAU']['TABLEAU_SERVER']
-tableau_certification_note = settings['TABLEAU']['TABLEAU_CERTIFICATION_NOTE']
-tableau_dq_warning_isSevere = settings['TABLEAU']['TABLEAU_DQ_WARNING_IS_SEVERE']
-
-database_type_filter = settings['DATABASE']['DATABASE_TYPE_FILTER']
-database_name_filter = settings['DATABASE']['DATABASE_NAME_FILTER']
-database_account_filter = settings['DATABASE']['DATABASE_ACCOUNT_FILTER']
-
-dbt_account_id = dbt_get_account_id(dbt_cloud_api, dbt_token)
-dbt_projects = dbt_get_projects(dbt_account_id, dbt_cloud_api, dbt_token)
-dbt_jobs = dbt_get_jobs(dbt_account_id,dbt_cloud_api, dbt_token)
-filtered_dbt_jobs = filter_dbt_jobs(dbt_project_filter, database_account_filter, dbt_jobs, dbt_projects)
-tableau_creds = authenticate_tableau(tableau_server, tableau_site, tableau_token_name, tableau_token)
+dbt_account_id = dbt_get_account_id(settings.dbt_cloud_api, settings.dbt_token)
+dbt_projects = dbt_get_projects(dbt_account_id, settings.dbt_cloud_api, settings.dbt_token)
+dbt_jobs = dbt_get_jobs(dbt_account_id, settings.dbt_cloud_api, settings.dbt_token)
+filtered_dbt_jobs = filter_dbt_jobs(settings.dbt_project_filter, settings.database_account_filter, dbt_jobs, dbt_projects)
+tableau_creds = authenticate_tableau(settings.tableau_server, settings.tableau_site, settings.tableau_token_name, settings.tableau_token)
 #tableau_databases = tableau_get_databases(tableau_server, database_type_filter, database_name_filter, tableau_creds)
-tableau_databases = tableau_get_databaseServers(tableau_server, database_type_filter, database_name_filter, tableau_creds)
+tableau_databases = tableau_get_databaseServers(settings.tableau_server, settings.database_type_filter, settings.database_name_filter, tableau_creds)
 
 for dbt_job in filtered_dbt_jobs:
-    dbt_models = dbt_get_models_for_job(dbt_metadata_api, dbt_token, dbt_job['id'])
+    dbt_models = dbt_get_models_for_job(settings.dbt_metadata_api,settings. dbt_token, dbt_job['id'])
 
     if len(dbt_models)>0:
         for tableau_database in tableau_databases:
             merged_tables = merge_dbt_tableau_tables(tableau_database, dbt_models, dbt_projects)
 
             for merged_table in merged_tables:
-                if dbt_generate_exposures:
-                    downstream_workbooks = tableau_get_downstream_workbooks(tableau_server, merged_table, tableau_creds)
+                if settings.dbt_generate_exposures:
+                    downstream_workbooks = tableau_get_downstream_workbooks(settings.tableau_server, merged_table, tableau_creds)
                     if len(downstream_workbooks)>0:
-                        generate_dbt_exposures(merged_table, downstream_workbooks, tableau_server, tableau_site)
+                        generate_dbt_exposures(merged_table, downstream_workbooks, settings.tableau_server, settings.tableau_site)
                     print('generating dbt exposures')
 
-                tableau_columns = get_tableau_columns(tableau_server, merged_table, tableau_creds)
+                tableau_columns = get_tableau_columns(settings.tableau_server, merged_table, tableau_creds)
                 table_description=make_table_description(merged_table)
-                publish_tableau_table_description(tableau_server, merged_table, table_description, tableau_creds)
-                set_tableau_table_quality_warning(tableau_server, merged_table, tableau_dq_warning_isSevere, tableau_creds)
-                set_tableau_table_certification(tableau_server, merged_table, dbt_meta_certification_flag, tableau_certification_note, tableau_creds)
-                publish_tableau_table_tags(tableau_server, merged_table, tableau_creds)
-                publish_tableau_column_descriptions(tableau_server, merged_table, tableau_columns, tableau_creds)
-                publish_tableau_column_tags(tableau_server, tableau_columns, merged_table, tableau_creds)
-
+                publish_tableau_table_description(settings.tableau_server, merged_table, table_description, tableau_creds)
+                set_tableau_table_quality_warning(settings.tableau_server, merged_table, settings.tableau_dq_warning_isSevere, tableau_creds)
+                set_tableau_table_certification(settings.tableau_server, merged_table, settings.dbt_meta_certification_flag, settings.tableau_certification_note, tableau_creds)
+                publish_tableau_table_tags(settings.tableau_server, merged_table, tableau_creds)
+                publish_tableau_column_descriptions(settings.tableau_server, merged_table, tableau_columns, tableau_creds)
+                publish_tableau_column_tags(settings.tableau_server, tableau_columns, merged_table, tableau_creds)
