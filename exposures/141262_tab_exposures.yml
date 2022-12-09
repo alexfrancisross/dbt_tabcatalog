@@ -1,0 +1,13 @@
+exposures:
+- depends_on:
+  - ref('dim_clubs')
+  - ref('fct_transfers')
+  description: ''
+  maturity: high
+  name: market value by club
+  owner:
+    email: aross@tableau.com
+    name: Alex Ross
+  type: dashboard
+  url: https://prod-uk-a.online.tableau.com/#/site/tableaujunkietest/workbooks/245868
+version: 2

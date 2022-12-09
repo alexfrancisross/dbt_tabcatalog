@@ -12,10 +12,10 @@ DBT:
 
 #TABLEAU SETTINGS
 TABLEAU:
-  TABLEAU_TOKEN_NAME : 'dbt' #string: tableau PAT token name
-  TABLEAU_TOKEN : 'VyJHyN7NQFKFHwQMX1LjfQ==:NS7kXssry1W2CZGfyatyP1nGVfGRxtin' #string: tableau PAT token
-  TABLEAU_SITE : 'tableaujunkietest' #string: tableau site name
-  TABLEAU_SERVER : 'https://prod-uk-a.online.tableau.com' #string: tableau server or cloud url
+  TABLEAU_TOKEN_NAME : 'dbt_uki' #'dbt' #string: tableau PAT token name
+  TABLEAU_TOKEN : 'c02ky4KCRS2FO8zrh+WKcg==:qpFCAt0M1RDxKQ50P3K9UrihRChOXPpA' #'VyJHyN7NQFKFHwQMX1LjfQ==:NS7kXssry1W2CZGfyatyP1nGVfGRxtin' #string: tableau PAT token
+  TABLEAU_SITE : 'ukiindustrydemos' #'tableaujunkietest' #string: tableau site name
+  TABLEAU_SERVER : 'https://eu-west-1a.online.tableau.com/' #'https://prod-uk-a.online.tableau.com' #string: tableau server or cloud url
   TABLEAU_CERTIFICATION_NOTE : 'certified by the meta config in dbt Cloud' #string: note to add to tableau certified tables
   TABLEAU_DQ_WARNING_IS_SEVERE : True #boolean: flag whether to use severe tableau data quality warnings where latest dbt run not successful
 

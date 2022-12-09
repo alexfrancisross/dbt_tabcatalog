@@ -5,6 +5,7 @@ from yaml.loader import SafeLoader
 from operator import itemgetter
 from collections import defaultdict
 import requests
+from itertools import groupby
 CONFIG='settings.yml'
 TABLEAU_API_VERSION='3.17'
 
@@ -25,7 +26,7 @@ def get_full_table_name(merged_table):
 
 #returns dbt Cloud account id
 def dbt_get_account_id(dbt_cloud_api, dbt_token):
-    print('getting dbt Cloud account id...')
+    print('getting dbt Cloud account id from dbt Cloud API: ' + dbt_cloud_api + '...')
     url = dbt_cloud_api
     payload = {}
     headers = {
@@ -35,6 +36,9 @@ def dbt_get_account_id(dbt_cloud_api, dbt_token):
     try:
         response = requests.request("GET", url, headers=headers, data=payload)
         response_json = json.loads(response.text)
+        if 'errors' in response_json.keys():
+            raise Exception(response_json['errors'][0]['message'])
+
         dbt_account_id = response_json['data'][0]['id']
         print('dbt Cloud account Id: ' + str(dbt_account_id))
     except Exception as e:
@@ -42,7 +46,7 @@ def dbt_get_account_id(dbt_cloud_api, dbt_token):
     return dbt_account_id
 
 #returns list of dbt projects for a given dbt Cloud account
-def dbt_get_projects(dbt_account_id, dbt_cloud_api, dbt_token):
+def dbt_get_projects(dbt_account_id, dbt_cloud_api, dbt_project_filter, database_account_filter, dbt_token):
     print('getting dbt projects for account id ' + str(dbt_account_id) + '...')
     url = dbt_cloud_api + str(dbt_account_id) +"/projects"
     payload={}
@@ -53,7 +57,17 @@ def dbt_get_projects(dbt_account_id, dbt_cloud_api, dbt_token):
     try:
         response = requests.request("GET", url, headers=headers, data=payload)
         response_json = json.loads(response.text)
+        if 'errors' in response_json.keys():
+            raise Exception(response_json['errors'][0]['message'])
+
         dbt_projects = response_json['data']
+
+        if len(dbt_project_filter) > 0:
+            filtered_dbt_projects = []
+            for dbt_project in dbt_projects:
+                if dbt_project['name'] in dbt_project_filter and dbt_project['connection']['details']['account'] in database_account_filter:
+                    filtered_dbt_projects.append(dbt_project)
+            dbt_projects=filtered_dbt_projects
         print('retrieved: ' + str(len(dbt_projects)) + ' dbt projects')
     except Exception as e:
         print('Error getting projects from dbt Cloud: ' + str(e))
@@ -71,6 +85,9 @@ def dbt_get_jobs(dbt_account_id, dbt_cloud_api, dbt_token):
     try:
         response = requests.request("GET", url, headers=headers, data=payload)
         response_json = json.loads(response.text)
+        if 'errors' in response_json.keys():
+            raise Exception(response_json['errors'][0]['message'])
+
         dbt_jobs = response_json['data']
         print('retrieved: ' + str(len(dbt_jobs)) + ' dbt jobs')
     except Exception as e:
@@ -78,23 +95,20 @@ def dbt_get_jobs(dbt_account_id, dbt_cloud_api, dbt_token):
     return dbt_jobs
 
 #returns filtered list of dbt jobs for a given dbt Cloud account (filtered by dbt_project_filter and database_account_filter lists)
-def filter_dbt_jobs(dbt_project_filter, database_account_filter, dbt_jobs, dbt_projects):
-    print('filtering dbt jobs matching projects: ' + str(dbt_project_filter) + ' and database accounts ' + str(database_account_filter) + '...')
+def filter_dbt_jobs(dbt_jobs, dbt_projects):
+    print('filtering dbt jobs matching projects...')
     try:
-        if len(dbt_project_filter) > 0:
-            filtered_dbt_project_ids = []
-            filtered_dbt_jobs = []
-            for dbt_project in dbt_projects:
-                if dbt_project['name'] in dbt_project_filter and dbt_project['connection']['details']['account'] in database_account_filter:
-                    filtered_dbt_project_ids.append(dbt_project['id'])
-            for dbt_job in dbt_jobs:
-                if dbt_job['project_id'] in filtered_dbt_project_ids:
-                    filtered_dbt_jobs.append(dbt_job)
-            dbt_jobs=filtered_dbt_jobs
+        filtered_dbt_jobs = []
+        dbt_project_ids = list(map(lambda d: d['id'],dbt_projects))
+
+        for dbt_job in dbt_jobs:
+            if dbt_job['project_id'] in dbt_project_ids:
+                filtered_dbt_jobs.append(dbt_job)
         print('retrieved: ' + str(len(dbt_jobs)) + ' dbt jobs')
+
     except Exception as e:
-        print('Error filtering dbt jobs matching projects: ' + str(dbt_project_filter) + ' and database accounts ' + str(database_account_filter) + str(e))
-    return dbt_jobs
+        print('Error filtering dbt jobs matching projects' + str(e))
+    return filtered_dbt_jobs
 
 #returns list of dbt models for a given job
 def dbt_get_models_for_job(dbt_metadata_api, dbt_token, job_id):
@@ -109,6 +123,8 @@ def dbt_get_models_for_job(dbt_metadata_api, dbt_token, job_id):
     try:
         response = requests.request("POST", url, headers=headers, data=payload)
         response_json = json.loads(response.text)
+        if 'errors' in response_json.keys():
+            raise Exception(response_json['errors'][0]['message'])
         dbt_models = response_json['data']['models']
         print('retreived ' + str(len(dbt_models)) + ' dbt models for jobId: ' + str(job_id))
     except Exception as e:
@@ -135,6 +151,9 @@ def authenticate_tableau(tableau_server, tableau_site_name, tableau_token_name, 
     try:
         response = requests.request("POST", url, headers=headers, data=payload)
         response_json = json.loads(response.text)
+        if 'errors' in response_json.keys():
+            raise Exception(response_json['errors'][0]['message'])
+
         tableau_creds = response_json['credentials']
         print('tableau user id: ' + str(tableau_creds['user']['id']))
     except Exception as e:
@@ -171,7 +190,7 @@ def tableau_get_databases(tableau_server, database_type_filter, database_name_fi
     print('retrieved ' + str(len(tableau_databases)) + ' tableau databases')
     return tableau_databases
 
-#returns a list of Tableau databases (filter using database_type_filter and database_name_filter)
+#returns a list of downstream workbooks (filter using database_type_filter and database_name_filter)
 def tableau_get_downstream_workbooks(tableau_server, merged_table, tableau_creds):
     full_table_name = get_full_table_name(merged_table)
     print('getting downstream workbooks for table: ' + full_table_name + '...')
@@ -214,7 +233,7 @@ def tableau_get_downstream_workbooks(tableau_server, merged_table, tableau_creds
                                        json={"query": mdapi_query})
         downstream_workbooks = json.loads(metadata_query.text)['data']['databaseTables'][0]['downstreamWorkbooks']
     except Exception as e:
-        print('Error getting databases from Tableau metadata API ' + str(e))
+        print('Error getting downstream workbooks from Tableau metadata API ' + str(e))
     print('retrieved ' + str(len(downstream_workbooks)) + ' downstream tableau workbooks')
     return downstream_workbooks
 
@@ -247,10 +266,14 @@ def tableau_get_databaseServers(tableau_server, database_type_filter, database_n
     try:
         metadata_query = requests.post(tableau_server + '/api/metadata/graphql', headers=auth_headers, verify=True,
                                        json={"query": mdapi_query})
-        tableau_databaseServers = json.loads(metadata_query.text)['data']['databaseServers']
+
+        response_json = json.loads(metadata_query.text)
+        tableau_databaseServers = response_json['data']['databaseServers']
         print('retrieved ' + str(len(tableau_databaseServers)) + ' Tableau database servers')
+        if 'errors' in response_json.keys():
+            raise Exception(response_json['errors'][0]['message'])
     except Exception as e:
-        print('Error getting databases from Tableau metadata API ' + str(e))
+        print('Error getting databases from Tableau metadata API: ' + str(e))
     return tableau_databaseServers
 
 #returns a list of Tableau columns for a given table
@@ -276,6 +299,7 @@ def get_tableau_columns(tableau_server, merged_table, tableau_creds):
 #publishes tableau column descriptions for a given table and list of columns
 def publish_tableau_column_descriptions(tableau_server, merged_table, tableau_columns, tableau_creds):
     full_table_name = get_full_table_name(merged_table)
+
     print('publishing tableau column descriptions for table: ' + full_table_name + '...')
     d = defaultdict(dict)
     for l in (tableau_columns, merged_table['columns']):
@@ -283,7 +307,7 @@ def publish_tableau_column_descriptions(tableau_server, merged_table, tableau_co
             d[elem['name']].update(elem)
     merged_columns = sorted(d.values(), key=itemgetter("name"))
     for column in merged_columns:
-        if column['description']:
+        if 'description' in column.keys():
             url = tableau_server + "/api/" + TABLEAU_API_VERSION + "/sites/" + tableau_creds['site']['id'] + "/tables/" + column['parentTableId'] + "/columns/" + column['id']
             payload = "<tsRequest>\n  <column description=\"" + column['description'] + " \">\n  </column>\n</tsRequest>"
             headers = {
@@ -318,14 +342,13 @@ def publish_tableau_column_tags(tableau_server, tableau_columns, merged_table, t
     return column_tags_response
 
 #returns a list of merged (i.e. matched database/schema/table name) tableau database tables and dbt models
-def merge_dbt_tableau_tables(tableau_database, dbt_models, dbt_projects):
+def merge_dbt_tableau_tables(tableau_database, dbt_models):
     print('merging dbt models with tableau tables for tableau database: ' + tableau_database['name'] + '...')
     d = defaultdict(dict)
     m = defaultdict(dict)
     for table in tableau_database['tables']:
         d[table['name'].lower()].update(table)
         for model in dbt_models:
-            dbt_projects = list(filter(lambda dbt_project: dbt_project['id'] == model['projectId'], dbt_projects))
             model_database_account = dbt_projects[0]['connection']['details']['account']
             if model['name'].lower() == table['name'].lower() and model['schema'].lower() == table['schema'].lower() and model['database'].lower() == tableau_database['name'].lower() and tableau_database['hostName'].lower().startswith(model_database_account.lower()): #if table/schema/database/hostname match
                 m[model['name'].lower()].update(table)
@@ -406,9 +429,9 @@ def set_tableau_table_quality_warning(tableau_server, merged_table, isSevere, ta
             else: #delete existing dq warning
                 response = requests.request("DELETE", dq_warning_url, headers=plain_headers).text
     except Exception as e:
-        print('Error setting data quality warning table description ' + str(e))
+        print('Error setting data quality warning on tableau table '  + full_table_name + str(e))
     #print('updated table data quality warning for tableau table: ' + full_table_name)
-    return response
+    return
 
 #sets tableau table certification for a given table based on dbt meta config for the dbt model
 def set_tableau_table_certification(tableau_server, merged_table, dbt_meta_certification_flag, certification_note, tableau_creds):
@@ -437,7 +460,7 @@ def set_tableau_table_certification(tableau_server, merged_table, dbt_meta_certi
     except Exception as e:
         print('Error certifying Tableau table ' + str(e))
     #print('updated table certification for tableau table: ' + full_table_name)
-    return response
+    return
 
 #helper function makes tableau table description
 def make_table_description(dbt_model):
@@ -460,32 +483,46 @@ def make_table_description(dbt_model):
         table_description = line1 + "&#xA;" + line3 + "&#xA;" + line4
     return table_description
 
-def generate_dbt_exposures(mergedtable, downstream_workbooks, tableau_server, tableau_site):
-    full_table_name = get_full_table_name(merged_table)
-    print('generating dbt exposures for table: ' + full_table_name + '...')
-    exposure_list=[]
-    for workbook in downstream_workbooks:
-        url=tableau_server + '/#/site/' + tableau_site + '/workbooks/'+ workbook['vizportalUrlId']
-        workbook_name = workbook['name']
-        description = workbook['description']
-        owner = workbook['owner']['name']
-        owner_username = workbook['owner']['username']
-        depends_on = []
-        for upstreamTable in workbook['upstreamTables']:
-            depends_on.append("ref('"+upstreamTable['name'].lower()+"')")
+def generate_dbt_exposures(downstream_workbooks, tableau_server, tableau_site):
+    print('generating dbt exposures for downstream workbooks...')
+    temp = groupby(downstream_workbooks, lambda x: x['dbt_projectId'])
+    workbooks_grouped_by_project = [list(group) for key, group in temp]
 
-        exposure_list.append({'name': workbook_name,'type':'dashboard','maturity': 'high','url': url,'description': description,'depends_on': depends_on,'owner':{'name':owner,'email':owner_username}})
-        #{'type':'dashboard'},{'maturity': 'high'},{'url': 'myurl'},{'description': 'mydescription'},{'depends_on': ''}
+    for project in workbooks_grouped_by_project:
+        exposures_list = []
+        for workbook in project:
+            url=tableau_server + '/#/site/' + tableau_site + '/workbooks/'+ workbook['vizportalUrlId']
+            workbook_name = workbook['name']
+            description = workbook['description']
+            owner = workbook['owner']['name']
+            owner_username = workbook['owner']['username']
+            depends_on = []
+            for upstreamTable in workbook['upstreamTables']:
+                depends_on.append("ref('"+upstreamTable['name'].lower()+"')")
+
+            exposures_list.append({'name': workbook_name,'type':'dashboard','maturity': 'high','url': url,'description': description,'depends_on': depends_on,'owner':{'name':owner,'email':owner_username}})
+        write_dbt_project_exposures_file(exposures_list, str(project[0]['dbt_projectId']))
+    return
+
+def write_dbt_project_exposures_file(exposures_list, project_name):
+    print('writing dbt exposures to file for project: ' + project_name + '...')
 
     dict_file = {'version' : 2,
-                'exposures': exposure_list}
+                'exposures': exposures_list}
     try:
-        with open(r'tab_exposure.yml', 'w') as file:
+        filename = '.\\exposures\\' + project_name + '_tab_exposures.yml'
+        with open(filename, 'w') as file:
             documents = yaml.dump(dict_file, file)
     except Exception as e:
-        print('Error generating dbt exposures ' + str(e))
-        # print('updated table certification for tableau table: ' + full_table_name)
+        print('Error writing dbt exposures ' + str(e))
     return
+
+def remove_duplicate_workbooks(workbooks):
+    print('removing duplicate workbooks: ...')
+    res_list = [i for n, i in enumerate(workbooks)
+                if i not in workbooks[n + 1:]]
+    print('done')
+    return res_list
 
 #read project yaml file
 class app_settings:
@@ -499,6 +536,7 @@ class app_settings:
             dbt_meta_certification_flag = data['DBT']['DBT_META_CERTIFICATION_FLAG']
             dbt_project_filter = data['DBT']['DBT_PROJECT_FILTER']
             dbt_generate_exposures = data['DBT']['DBT_GENERATE_EXPOSURES']
+            dbt_exposures_environment_filter = data['DBT']['DBT_EXPOSURES_ENVIRONMENT_FILTER']
 
             tableau_token = data['TABLEAU']['TABLEAU_TOKEN']
             tableau_token_name = data['TABLEAU']['TABLEAU_TOKEN_NAME']
@@ -520,32 +558,39 @@ class app_settings:
 settings = app_settings()
 
 dbt_account_id = dbt_get_account_id(settings.dbt_cloud_api, settings.dbt_token)
-dbt_projects = dbt_get_projects(dbt_account_id, settings.dbt_cloud_api, settings.dbt_token)
+dbt_projects = dbt_get_projects(dbt_account_id, settings.dbt_cloud_api, settings.dbt_project_filter, settings.database_account_filter, settings.dbt_token)
 dbt_jobs = dbt_get_jobs(dbt_account_id, settings.dbt_cloud_api, settings.dbt_token)
-filtered_dbt_jobs = filter_dbt_jobs(settings.dbt_project_filter, settings.database_account_filter, dbt_jobs, dbt_projects)
+filtered_dbt_jobs = filter_dbt_jobs(dbt_jobs, dbt_projects)
 tableau_creds = authenticate_tableau(settings.tableau_server, settings.tableau_site, settings.tableau_token_name, settings.tableau_token)
 #tableau_databases = tableau_get_databases(tableau_server, database_type_filter, database_name_filter, tableau_creds)
 tableau_databases = tableau_get_databaseServers(settings.tableau_server, settings.database_type_filter, settings.database_name_filter, tableau_creds)
+all_downstream_workbooks=[]
 
-for dbt_job in filtered_dbt_jobs:
+for dbt_job in dbt_jobs:
     dbt_models = dbt_get_models_for_job(settings.dbt_metadata_api,settings. dbt_token, dbt_job['id'])
 
     if len(dbt_models)>0:
         for tableau_database in tableau_databases:
-            merged_tables = merge_dbt_tableau_tables(tableau_database, dbt_models, dbt_projects)
+            merged_tables = merge_dbt_tableau_tables(tableau_database, dbt_models)
 
             for merged_table in merged_tables:
+                #tableau_columns = get_tableau_columns(settings.tableau_server, merged_table, tableau_creds)
+                #table_description=make_table_description(merged_table)
+                #publish_tableau_table_description(settings.tableau_server, merged_table, table_description, tableau_creds)
+                #set_tableau_table_quality_warning(settings.tableau_server, merged_table, settings.tableau_dq_warning_isSevere, tableau_creds)
+                #set_tableau_table_certification(settings.tableau_server, merged_table, settings.dbt_meta_certification_flag, settings.tableau_certification_note, tableau_creds)
+                #publish_tableau_table_tags(settings.tableau_server, merged_table, tableau_creds)
+                #publish_tableau_column_descriptions(settings.tableau_server, merged_table, tableau_columns, tableau_creds)
+                #publish_tableau_column_tags(settings.tableau_server, tableau_columns, merged_table, tableau_creds)
+
                 if settings.dbt_generate_exposures:
                     downstream_workbooks = tableau_get_downstream_workbooks(settings.tableau_server, merged_table, tableau_creds)
-                    if len(downstream_workbooks)>0:
-                        generate_dbt_exposures(merged_table, downstream_workbooks, settings.tableau_server, settings.tableau_site)
-                    print('generating dbt exposures')
+                    for workbook in downstream_workbooks:
+                        workbook['dbt_projectId'] = merged_table['projectId']
+                        workbook['dbt_environmentId'] = merged_table['environmentId']
+                        all_downstream_workbooks.append(workbook)
 
-                tableau_columns = get_tableau_columns(settings.tableau_server, merged_table, tableau_creds)
-                table_description=make_table_description(merged_table)
-                publish_tableau_table_description(settings.tableau_server, merged_table, table_description, tableau_creds)
-                set_tableau_table_quality_warning(settings.tableau_server, merged_table, settings.tableau_dq_warning_isSevere, tableau_creds)
-                set_tableau_table_certification(settings.tableau_server, merged_table, settings.dbt_meta_certification_flag, settings.tableau_certification_note, tableau_creds)
-                publish_tableau_table_tags(settings.tableau_server, merged_table, tableau_creds)
-                publish_tableau_column_descriptions(settings.tableau_server, merged_table, tableau_columns, tableau_creds)
-                publish_tableau_column_tags(settings.tableau_server, tableau_columns, merged_table, tableau_creds)
+if len(all_downstream_workbooks)>0:
+    all_downstream_workbooks = remove_duplicate_workbooks(all_downstream_workbooks)
+    generate_dbt_exposures(all_downstream_workbooks, settings.tableau_server, settings.tableau_site)
+    print('generating dbt exposures')
