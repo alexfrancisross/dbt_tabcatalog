@@ -6,8 +6,9 @@ from operator import itemgetter
 from collections import defaultdict
 import requests
 from itertools import groupby
+import base64
 CONFIG='settings.yml'
-TABLEAU_API_VERSION='3.17'
+tableau_API_VERSION='3.17'
 
 #helper function to create xml formatted strings
 def xmlesc(txt):
@@ -133,7 +134,7 @@ def dbt_get_models_for_job(dbt_metadata_api, dbt_token, job_id):
 
 #authenticates with tableau server/cloud and returns credentials object
 def authenticate_tableau(tableau_server, tableau_site_name, tableau_token_name, tableau_token):
-    url = tableau_server + "/api/" + TABLEAU_API_VERSION + "/auth/signin"
+    url = tableau_server + "/api/" + tableau_API_VERSION + "/auth/signin"
     print('authenticating with tableau server url: ' + url + '...')
     payload = json.dumps({
         "credentials": {
@@ -151,16 +152,16 @@ def authenticate_tableau(tableau_server, tableau_site_name, tableau_token_name, 
     try:
         response = requests.request("POST", url, headers=headers, data=payload)
         response_json = json.loads(response.text)
-        if 'errors' in response_json.keys():
-            raise Exception(response_json['errors'][0]['message'])
+        if 'error' in response_json.keys():
+            raise Exception(response_json['error'])
 
         tableau_creds = response_json['credentials']
         print('tableau user id: ' + str(tableau_creds['user']['id']))
     except Exception as e:
-        print('Error authenticating with Tableau. Servername : ' + tableau_server + ' Site : ' + tableau_site_name + ' ' +  str(e))
+        print('Error authenticating with tableau. Servername: ' + tableau_server + ' Site: ' + tableau_site_name + ' ' +  str(e))
     return tableau_creds
 
-#returns a list of Tableau databases (filter using database_type_filter and database_name_filter)
+#returns a list of tableau databases (filter using database_type_filter and database_name_filter)
 def tableau_get_databases(tableau_server, database_type_filter, database_name_filter, tableau_creds):
     print('getting tableau databases with database type: ' + database_type_filter + '...')
     filter = 'connectionType: "' + database_type_filter + '"'
@@ -186,7 +187,7 @@ def tableau_get_databases(tableau_server, database_type_filter, database_name_fi
                                        json={"query": mdapi_query})
         tableau_databases = json.loads(metadata_query.text)['data']['databases']
     except Exception as e:
-        print('Error getting databases from Tableau metadata API ' + str(e))
+        print('Error getting databases from tableau metadata API ' + str(e))
     print('retrieved ' + str(len(tableau_databases)) + ' tableau databases')
     return tableau_databases
 
@@ -233,15 +234,15 @@ def tableau_get_downstream_workbooks(tableau_server, merged_table, tableau_creds
                                        json={"query": mdapi_query})
         downstream_workbooks = json.loads(metadata_query.text)['data']['databaseTables'][0]['downstreamWorkbooks']
     except Exception as e:
-        print('Error getting downstream workbooks from Tableau metadata API ' + str(e))
+        print('Error getting downstream workbooks from tableau metadata API ' + str(e))
     print('retrieved ' + str(len(downstream_workbooks)) + ' downstream tableau workbooks')
     return downstream_workbooks
 
 
 
-#returns a list of Tableau databases (including database hostnames and tables)
+#returns a list of tableau databases (including database hostnames and tables)
 def tableau_get_databaseServers(tableau_server, database_type_filter, database_name_filter, tableau_creds):
-    print('getting database server list from Tableau metadata API with database type: ' + database_type_filter + '...')
+    print('getting database server list from tableau metadata API with database type: ' + database_type_filter + '...')
 
     filter = 'connectionType: "' + database_type_filter + '"'
     if len(database_name_filter)>0:
@@ -269,22 +270,22 @@ def tableau_get_databaseServers(tableau_server, database_type_filter, database_n
 
         response_json = json.loads(metadata_query.text)
         tableau_databaseServers = response_json['data']['databaseServers']
-        print('retrieved ' + str(len(tableau_databaseServers)) + ' Tableau database servers')
+        print('retrieved ' + str(len(tableau_databaseServers)) + ' tableau database servers')
         if 'errors' in response_json.keys():
             raise Exception(response_json['errors'][0]['message'])
     except Exception as e:
-        print('Error getting databases from Tableau metadata API: ' + str(e))
+        print('Error getting databases from tableau metadata API: ' + str(e))
     return tableau_databaseServers
 
-#returns a list of Tableau columns for a given table
+#returns a list of tableau columns for a given table
 def get_tableau_columns(tableau_server, merged_table, tableau_creds):
     full_table_name = get_full_table_name(merged_table)
     print('getting columns for tableau table ' + full_table_name + '...')
     site_id=tableau_creds['site']['id']
-    get_columns_url = tableau_server + "/api/" + TABLEAU_API_VERSION + "/sites/" + site_id + "/tables/" + merged_table['luid'] + '/columns'
+    get_columns_url = tableau_server + "/api/" + tableau_API_VERSION + "/sites/" + site_id + "/tables/" + merged_table['luid'] + '/columns'
     payload = ""
     headers = {
-        'X-Tableau-Auth': tableau_creds['token'],
+        'X-tableau-Auth': tableau_creds['token'],
         'Content-Type': 'appication/json',
         'Accept': 'application/json'
     }
@@ -292,7 +293,7 @@ def get_tableau_columns(tableau_server, merged_table, tableau_creds):
         response = requests.request("GET", get_columns_url, headers=headers, data=payload)
         tableau_columns = json.loads(response.text)['columns']['column']
     except Exception as e:
-        print('Error getting columns from Tableau metadata API ' + str(e))
+        print('Error getting columns from tableau metadata API ' + str(e))
     print('retrieved ' + str(len(tableau_columns)) + ' columns for tableau table: ' + full_table_name)
     return tableau_columns
 
@@ -308,16 +309,16 @@ def publish_tableau_column_descriptions(tableau_server, merged_table, tableau_co
     merged_columns = sorted(d.values(), key=itemgetter("name"))
     for column in merged_columns:
         if 'description' in column.keys():
-            url = tableau_server + "/api/" + TABLEAU_API_VERSION + "/sites/" + tableau_creds['site']['id'] + "/tables/" + column['parentTableId'] + "/columns/" + column['id']
+            url = tableau_server + "/api/" + tableau_API_VERSION + "/sites/" + tableau_creds['site']['id'] + "/tables/" + column['parentTableId'] + "/columns/" + column['id']
             payload = "<tsRequest>\n  <column description=\"" + column['description'] + " \">\n  </column>\n</tsRequest>"
             headers = {
-                'X-Tableau-Auth': tableau_creds['token'],
+                'X-tableau-Auth': tableau_creds['token'],
                 'Content-Type': 'text/plain'
             }
             try:
                 response = requests.request("PUT", url, headers=headers, data=payload).text
             except Exception as e:
-                print('Error publishing Tableau column descriptions ' + str(e))
+                print('Error publishing tableau column descriptions ' + str(e))
     #print('published tableau column descriptions for table ' + full_table_name)
     return
 
@@ -327,17 +328,17 @@ def publish_tableau_column_tags(tableau_server, tableau_columns, merged_table, t
     full_table_name = get_full_table_name(merged_table)
     print('publishing tableau column tags: ' + tag + ' for table: ' + full_table_name + '...')
     headers = {
-        'X-Tableau-Auth': tableau_creds['token'],
+        'X-tableau-Auth': tableau_creds['token'],
         'Content-Type': 'text/plain'
     }
     for tableau_column in tableau_columns:
-        url = tableau_server + "/api/" + TABLEAU_API_VERSION + "/sites/" + tableau_creds['site']['id'] + "/columns/" + tableau_column['id'] + "/tags"
+        url = tableau_server + "/api/" + tableau_API_VERSION + "/sites/" + tableau_creds['site']['id'] + "/columns/" + tableau_column['id'] + "/tags"
         payload = "<tsRequest>\n  <tags>\n <tag label=\"" + tag + "\"/>\n  </tags>\n</tsRequest>"
 
         try:
             column_tags_response = requests.request("PUT", url, headers=headers, data=payload).text
         except Exception as e:
-            print('Error publishing Tableau column tags ' + str(e))
+            print('Error publishing tableau column tags ' + str(e))
     #print('published tableau column tags: ' + tag + ' for table: ' + full_table_name)
     return column_tags_response
 
@@ -363,15 +364,15 @@ def publish_tableau_table_tags(tableau_server, merged_table, tableau_creds):
     tag = merged_table['packageName']
     print('publishing tag ' + tag + ' for tableau table: ' + full_table_name + '...')
     headers = {
-        'X-Tableau-Auth': tableau_creds['token'],
+        'X-tableau-Auth': tableau_creds['token'],
         'Content-Type': 'text/plain'
     }
-    url = tableau_server + "/api/" + TABLEAU_API_VERSION + "/sites/" + tableau_creds['site']['id'] + "/tables/" + merged_table['luid'] + "/tags"
+    url = tableau_server + "/api/" + tableau_API_VERSION + "/sites/" + tableau_creds['site']['id'] + "/tables/" + merged_table['luid'] + "/tags"
     payload = "<tsRequest>\n  <tags>\n <tag label=\"" + tag + "\"/>\n  </tags>\n</tsRequest>"
     try:
         table_tags_response = requests.request("PUT", url, headers=headers, data=payload).text
     except Exception as e:
-        print('Error publishing Tableau table tag ' + str(e))
+        print('Error publishing tableau table tag ' + str(e))
     #print('published table tag ' + tag + ' for tableau table: ' + full_table_name)
     return table_tags_response
 
@@ -379,16 +380,16 @@ def publish_tableau_table_tags(tableau_server, merged_table, tableau_creds):
 def publish_tableau_table_description(tableau_server, merged_table, description_text, tableau_creds):
     full_table_name = get_full_table_name(merged_table)
     print('publishing description for tableau table ' + full_table_name + '...')
-    url = tableau_server+"/api/" + TABLEAU_API_VERSION + "/sites/"+ tableau_creds['site']['id']+"/tables/" + merged_table['luid']
+    url = tableau_server+"/api/" + tableau_API_VERSION + "/sites/"+ tableau_creds['site']['id']+"/tables/" + merged_table['luid']
     payload = '<tsRequest>\n  <table description=\'' + description_text +'\'>\n  </table>\n</tsRequest>'
     headers = {
-        'X-Tableau-Auth': tableau_creds['token'],
+        'X-tableau-Auth': tableau_creds['token'],
         'Content-Type': 'text/plain'
     }
     try:
         table_description_response = requests.request("PUT", url, headers=headers, data=payload).text
     except Exception as e:
-        print('Error publishing Tableau table description ' + str(e))
+        print('Error publishing tableau table description ' + str(e))
     #print('published tableau table description for table ' + full_table_name )
     return table_description_response
 
@@ -396,7 +397,7 @@ def publish_tableau_table_description(tableau_server, merged_table, description_
 def set_tableau_table_quality_warning(tableau_server, merged_table, isSevere, tableau_creds):
     full_table_name = get_full_table_name(merged_table)
     print('updating table data quality warning for tableau table: ' + full_table_name + '...')
-    url = tableau_server+"/api/" + TABLEAU_API_VERSION + "/sites/"+ tableau_creds['site']['id']+"/dataQualityWarnings/table/" + merged_table['luid']
+    url = tableau_server+"/api/" + tableau_API_VERSION + "/sites/"+ tableau_creds['site']['id']+"/dataQualityWarnings/table/" + merged_table['luid']
     dbt_model_status = merged_table['status']
     dbt_model_status='failed' #TEST FLAG
     dbt_cloud_base_url = 'https://cloud.getdbt.com/next/deploy/' + str(merged_table['accountId']) + '/projects/' + str(merged_table['projectId'])
@@ -407,12 +408,12 @@ def set_tableau_table_quality_warning(tableau_server, merged_table, isSevere, ta
             #+ "*&#xA;" + 'dbt runId: *' + str(dbt_model['runId']) + "*&#xA;" + 'dbt jobId: *' + str(dbt_model['jobId']) \
             #+ "*&#xA;" + 'data quality warning last updated: *'+ str(datetime.utcnow().strftime("%Y-%m-%d %H:%MUTC")) +  "*&#xA;" \
     json_headers = {
-        'X-Tableau-Auth': tableau_creds['token'],
+        'X-tableau-Auth': tableau_creds['token'],
         'Content-Type': 'appication/json',
         'Accept': 'application/json'
     }
     plain_headers = {
-        'X-Tableau-Auth': tableau_creds['token'],
+        'X-tableau-Auth': tableau_creds['token'],
         'Content-Type': 'plain/text'
     }
     existing_dq_warning=requests.request('get', url, headers=json_headers).text
@@ -423,7 +424,7 @@ def set_tableau_table_quality_warning(tableau_server, merged_table, isSevere, ta
             response = requests.request("POST", url, headers=plain_headers, data=payload).text
         else:
             existing_dq_warning_object_id = existing_dq_warning_object['dataQualityWarningList']['dataQualityWarning'][0]['id']
-            dq_warning_url = tableau_server + "/api/" + TABLEAU_API_VERSION + "/sites/" + tableau_creds['site']['id'] + "/dataQualityWarnings/" + existing_dq_warning_object_id
+            dq_warning_url = tableau_server + "/api/" + tableau_API_VERSION + "/sites/" + tableau_creds['site']['id'] + "/dataQualityWarnings/" + existing_dq_warning_object_id
             if dbt_model_status != 'success': #update existing dq warning
                 response = requests.request("PUT", dq_warning_url, headers=plain_headers, data=payload).text
             else: #delete existing dq warning
@@ -449,16 +450,16 @@ def set_tableau_table_certification(tableau_server, merged_table, dbt_meta_certi
         isCertified = False
         certification_note = ""
 
-    url = tableau_server+"/api/" + TABLEAU_API_VERSION + "/sites/"+ tableau_creds['site']['id']+"/tables/" + merged_table['luid']
+    url = tableau_server+"/api/" + tableau_API_VERSION + "/sites/"+ tableau_creds['site']['id']+"/tables/" + merged_table['luid']
     payload = '<tsRequest>\n  <table isCertified="'+ str(isCertified).lower() + '"\n   certificationNote="'+ certification_note + '"  >\n  </table>\n</tsRequest>'
     headers = {
-        'X-Tableau-Auth': tableau_creds['token'],
+        'X-tableau-Auth': tableau_creds['token'],
         'Content-Type': 'text/plain'
     }
     try:
         response = requests.request("PUT", url, headers=headers, data=payload).text
     except Exception as e:
-        print('Error certifying Tableau table ' + str(e))
+        print('Error certifying tableau table ' + str(e))
     #print('updated table certification for tableau table: ' + full_table_name)
     return
 
@@ -483,7 +484,7 @@ def make_table_description(dbt_model):
         table_description = line1 + "&#xA;" + line3 + "&#xA;" + line4
     return table_description
 
-def generate_dbt_exposures(downstream_workbooks, tableau_server, tableau_site):
+def generate_dbt_exposures(dbt_account_id, dbt_cloud_api, dbt_token, github_token, downstream_workbooks, tableau_server, tableau_site, dbt_exposure_maturity):
     print('generating dbt exposures for downstream workbooks...')
     temp = groupby(downstream_workbooks, lambda x: x['dbt_projectId'])
     workbooks_grouped_by_project = [list(group) for key, group in temp]
@@ -500,15 +501,58 @@ def generate_dbt_exposures(downstream_workbooks, tableau_server, tableau_site):
             for upstreamTable in workbook['upstreamTables']:
                 depends_on.append("ref('"+upstreamTable['name'].lower()+"')")
 
-            exposures_list.append({'name': workbook_name,'type':'dashboard','maturity': 'high','url': url,'description': description,'depends_on': depends_on,'owner':{'name':owner,'email':owner_username}})
-        write_dbt_project_exposures_file(exposures_list, str(project[0]['dbt_projectId']))
+            exposures_list.append({'name': workbook_name,'type':'dashboard','maturity': dbt_exposure_maturity,'url': url,'description': description,'depends_on': depends_on,'owner':{'name':owner,'email':owner_username}})
+
+        dict_file = {'version': 2,
+                     'exposures': exposures_list}
+        write_dbt_project_exposures_file(dict_file, str(project[0]['dbt_projectId']))
+        write_github_exposures_file(dbt_account_id, dbt_cloud_api, dbt_token, github_token, dict_file, str(project[0]['dbt_projectId']))
     return
 
-def write_dbt_project_exposures_file(exposures_list, project_name):
-    print('writing dbt exposures to file for project: ' + project_name + '...')
 
-    dict_file = {'version' : 2,
-                'exposures': exposures_list}
+def write_github_exposures_file(dbt_account_id, dbt_cloud_api, dbt_token, github_token, dict_file, project_id):
+    headers = {
+        'Content-Type': 'appication/json',
+        'Authorization': 'Token ' + dbt_token
+    }
+    url = 'https://cloud.getdbt.com/api/v3/accounts/' + str(dbt_account_id) + '/projects/' + str(project_id)
+
+    try:
+        response = requests.request("get", url, headers=headers)
+        response_json=json.loads(response.text)
+        repository = response_json['data']['repository']
+
+        #update github repo
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + github_token
+        }
+        filename = 'models/tab_exposures.yml'
+        git_url = 'https://api.github.com/repos/' + repository['full_name'] + '/contents/' + filename
+        message_bytes = yaml.dump(dict_file).encode('utf-8')
+        base64_bytes = base64.b64encode(message_bytes)
+
+        print('uploading dbt exposures file to github repo ' + git_url)
+        payload = json.loads('{"message": "auto generated by tableau dbt integration", "content":"' + base64_bytes.decode('utf-8') + '"}')
+
+        #check if exposures file already exists
+        response = requests.request("get", git_url, headers=headers)
+
+        #if exposures file exists in github then update headers to includ sha
+        if response.status_code == 200:
+            response_json = json.loads(response.text)
+            sha = response_json['sha']
+            payload['sha'] = sha
+
+        response = requests.put(git_url, headers=headers, data=json.dumps(payload))
+        print(response.text)
+
+    except Exception as e:
+        print(e)
+    return
+
+def write_dbt_project_exposures_file(dict_file, project_name):
+    print('writing dbt exposures to file for project: ' + project_name + '...')
     try:
         filename = '.\\exposures\\' + project_name + '_tab_exposures.yml'
         with open(filename, 'w') as file:
@@ -530,13 +574,13 @@ class app_settings:
         with open(CONFIG) as f:
             data = yaml.load(f, Loader=SafeLoader)
 
-            dbt_token = data['DBT']['DBT_PAT']
+            dbt_token = data['DBT']['DBT_TOKEN']
             dbt_cloud_api = data['DBT']['DBT_CLOUD_API']
             dbt_metadata_api = data['DBT']['DBT_METADATA_API']
             dbt_meta_certification_flag = data['DBT']['DBT_META_CERTIFICATION_FLAG']
             dbt_project_filter = data['DBT']['DBT_PROJECT_FILTER']
             dbt_generate_exposures = data['DBT']['DBT_GENERATE_EXPOSURES']
-            dbt_exposures_environment_filter = data['DBT']['DBT_EXPOSURES_ENVIRONMENT_FILTER']
+            dbt_exposures_maturity = data['DBT']['DBT_EXPOSURES_MATURITY']
 
             tableau_token = data['TABLEAU']['TABLEAU_TOKEN']
             tableau_token_name = data['TABLEAU']['TABLEAU_TOKEN_NAME']
@@ -550,9 +594,10 @@ class app_settings:
             database_name_filter = data['DATABASE']['DATABASE_NAME_FILTER']
             database_account_filter = data['DATABASE']['DATABASE_ACCOUNT_FILTER']
 
+            github_token = data['GITHUB']['GITHUB_TOKEN']
+
     except Exception as e:
         print("failed to read yaml file " + str(e))
-
 
 #MAIN PROGRAM
 settings = app_settings()
@@ -560,9 +605,7 @@ settings = app_settings()
 dbt_account_id = dbt_get_account_id(settings.dbt_cloud_api, settings.dbt_token)
 dbt_projects = dbt_get_projects(dbt_account_id, settings.dbt_cloud_api, settings.dbt_project_filter, settings.database_account_filter, settings.dbt_token)
 dbt_jobs = dbt_get_jobs(dbt_account_id, settings.dbt_cloud_api, settings.dbt_token)
-filtered_dbt_jobs = filter_dbt_jobs(dbt_jobs, dbt_projects)
 tableau_creds = authenticate_tableau(settings.tableau_server, settings.tableau_site, settings.tableau_token_name, settings.tableau_token)
-#tableau_databases = tableau_get_databases(tableau_server, database_type_filter, database_name_filter, tableau_creds)
 tableau_databases = tableau_get_databaseServers(settings.tableau_server, settings.database_type_filter, settings.database_name_filter, tableau_creds)
 all_downstream_workbooks=[]
 
@@ -574,14 +617,14 @@ for dbt_job in dbt_jobs:
             merged_tables = merge_dbt_tableau_tables(tableau_database, dbt_models)
 
             for merged_table in merged_tables:
-                #tableau_columns = get_tableau_columns(settings.tableau_server, merged_table, tableau_creds)
-                #table_description=make_table_description(merged_table)
-                #publish_tableau_table_description(settings.tableau_server, merged_table, table_description, tableau_creds)
-                #set_tableau_table_quality_warning(settings.tableau_server, merged_table, settings.tableau_dq_warning_isSevere, tableau_creds)
-                #set_tableau_table_certification(settings.tableau_server, merged_table, settings.dbt_meta_certification_flag, settings.tableau_certification_note, tableau_creds)
-                #publish_tableau_table_tags(settings.tableau_server, merged_table, tableau_creds)
-                #publish_tableau_column_descriptions(settings.tableau_server, merged_table, tableau_columns, tableau_creds)
-                #publish_tableau_column_tags(settings.tableau_server, tableau_columns, merged_table, tableau_creds)
+                tableau_columns = get_tableau_columns(settings.tableau_server, merged_table, tableau_creds)
+                table_description=make_table_description(merged_table)
+                publish_tableau_table_description(settings.tableau_server, merged_table, table_description, tableau_creds)
+                set_tableau_table_quality_warning(settings.tableau_server, merged_table, settings.tableau_dq_warning_isSevere, tableau_creds)
+                set_tableau_table_certification(settings.tableau_server, merged_table, settings.dbt_meta_certification_flag, settings.tableau_certification_note, tableau_creds)
+                publish_tableau_table_tags(settings.tableau_server, merged_table, tableau_creds)
+                publish_tableau_column_descriptions(settings.tableau_server, merged_table, tableau_columns, tableau_creds)
+                publish_tableau_column_tags(settings.tableau_server, tableau_columns, merged_table, tableau_creds)
 
                 if settings.dbt_generate_exposures:
                     downstream_workbooks = tableau_get_downstream_workbooks(settings.tableau_server, merged_table, tableau_creds)
@@ -592,5 +635,4 @@ for dbt_job in dbt_jobs:
 
 if len(all_downstream_workbooks)>0:
     all_downstream_workbooks = remove_duplicate_workbooks(all_downstream_workbooks)
-    generate_dbt_exposures(all_downstream_workbooks, settings.tableau_server, settings.tableau_site)
-    print('generating dbt exposures')
+    generate_dbt_exposures(dbt_account_id, settings.dbt_cloud_api, settings.dbt_token, settings.github_token, all_downstream_workbooks, settings.tableau_server, settings.tableau_site, settings.dbt_exposures_maturity)
