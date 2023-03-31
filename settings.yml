@@ -1,30 +1,30 @@
 #DBT CLOUD SETTINGS
 DBT:
-  DBT_TOKEN : '1086a0bfb6a076f8122139167ca1ea2547203da0' #string: dbt Cloud PAT token
+  DBT_TOKEN : '<YOUR DBT CLOUD PAT TOKEN>' #string: dbt Cloud PAT token
   DBT_CLOUD_API : 'https://cloud.getdbt.com/api/v2/accounts/' #string: dbt Cloud API endpoint
   DBT_METADATA_API : 'https://metadata.cloud.getdbt.com/graphql' #string: dbt Cloud Metadata API endpoint
   DBT_META_CERTIFICATION_FLAG : 'TableauCertified' #string: a boolean dbt meta config attribute used to indicate whether tableau table should be certified. Leave blank to certify all tableau tables. see https://docs.getdbt.com/reference/resource-configs/meta
-  DBT_PROJECT_FILTER : ["jaffle_shop_metrics"] #, "football_transfers_demo"] #list: list of dbt projects to sync. Leave empty list to sync all dbt projects
+  DBT_PROJECT_FILTER : ["<PROJECT 1>", "<PROJECT 2>"] #list: list of dbt projects to sync. Leave empty list to sync all dbt projects e.g ["jaffle_shop_metrics", "football_transfers_demo"] 
   DBT_GENERATE_EXPOSURES : True #boolean: flag whether to generate dbt exposures
   DBT_EXPOSURES_FILE_LOCATION : '.\exposures'
   DBT_EXPOSURES_MATURITY : 'medium' #string: string indicating maturity of dbt exposures must be high | medium | low
 
 #TABLEAU SETTINGS
 TABLEAU:
-  TABLEAU_TOKEN_NAME : 'dbt' #string: tableau PAT token name
-  TABLEAU_TOKEN : 'EjmzgCWgT9ewbwIjrqk4fQ==:zjirzPUzEtfwgfRP9b2EmspbBZithJAX' #string: tableau PAT token
-  TABLEAU_SITE : 'tableaujunkietest' #string: tableau site name
-  TABLEAU_SERVER : 'https://prod-uk-a.online.tableau.com' #string: tableau server or cloud url
+  TABLEAU_TOKEN_NAME : '<YOUR TABLEAU SERVER/CLOUD PAT TOKEN NAME>' #string: tableau PAT token name
+  TABLEAU_TOKEN : '<YOUR TABLEAU SERVER/CLOUD PAT TOKEN>' #string: tableau PAT token
+  TABLEAU_SITE : '<YOUR TABLEAU SERVER/CLOUD SITE NAME>' #string: tableau site name
+  TABLEAU_SERVER : '<YOUR TABLEAU SERVER/CLOUD URL>' #string: tableau server or cloud url e.g. https://prod-uk-a.online.tableau.com
   TABLEAU_CERTIFICATION_NOTE : 'certified by the meta config in dbt Cloud' #string: note to add to tableau certified tables
   TABLEAU_DQ_WARNING_IS_SEVERE : True #boolean: flag whether to use severe tableau data quality warnings where latest dbt run not successful
 
 #DATABASE SETTINGS
 DATABASE:
   DATABASE_TYPE_FILTER : 'snowflake' #string: database type to sync
-  DATABASE_NAME_FILTER : ["DBT", "ANALYTICS"] #list: list of database names to sync metadata. Leave empty list to sync all databases
-  DATABASE_ACCOUNT_FILTER : ["tableause"] #list: list of database accounts to sync metadata. Should match the account name in dbt deployment connection details. Leave empty list to sync all accounts
+  DATABASE_NAME_FILTER : ["<DATABASE 1>", "<DATABASE 1>"] #list: list of database names to sync metadata. Leave empty list to sync all databases e.g. ["tableaudatabase", "mydatabase"]
+  DATABASE_ACCOUNT_FILTER : ["<YOUR SNOWFLAKE ACCOUNT NAME>"] #list: list of database accounts to sync metadata. Should match the account name in dbt deployment connection details. Leave empty list to sync all accounts
 
 #GITHUB SETTINGS
 GITHUB:
   GITHUB_WRITE_EXPOSURES : True #boolean: flag whether to write dbt exposures to github repo
-  GITHUB_TOKEN : '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' #string: github personal access token used for writing Tableau exposures to dbt github repo
+  GITHUB_TOKEN : '<YOUR GITHUB PAT TOKEN>' #string: github personal access token used for writing Tableau exposures to dbt github repo
